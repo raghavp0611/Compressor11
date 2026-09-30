@@ -1,0 +1,762 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+</head>
+<body>
+<title>Shrinkwrap</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column tool. Controls up top, a live budget summary, then a dense results ledger. */
+:root {
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --surface-2: #f6f8fa;
+  --fg: #16202b;
+  --muted: #5f6d7c;
+  --line: #d3dae2;
+  --accent: #0a5fd0;
+  --accent-soft: #e2ecfb;
+  --accent-fg: #ffffff;
+  --ok: #1b7f4b;
+  --ok-soft: #dff3e7;
+  --warn: #a56400;
+  --warn-soft: #fbeed5;
+  --bad: #b8271f;
+  --bad-soft: #fbe3e1;
+  --font-body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1418; --surface: #171d24; --surface-2: #1e262e; --fg: #e7ecf1; --muted: #8b98a6; --line: #2b353f;
+    --accent: #5ea3ff; --accent-soft: #15304f; --accent-fg: #0a1320;
+    --ok: #4fc687; --ok-soft: #12321f; --warn: #e3a341; --warn-soft: #3a2a0c; --bad: #f2776f; --bad-soft: #3d1613;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1418; --surface: #171d24; --surface-2: #1e262e; --fg: #e7ecf1; --muted: #8b98a6; --line: #2b353f;
+  --accent: #5ea3ff; --accent-soft: #15304f; --accent-fg: #0a1320;
+  --ok: #4fc687; --ok-soft: #12321f; --warn: #e3a341; --warn-soft: #3a2a0c; --bad: #f2776f; --bad-soft: #3d1613;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 14px/1.45 var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1080px; margin: 0 auto; padding-block: 20px 48px; padding-inline: 16px; display: grid; gap: 16px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; text-wrap: balance; }
+h1 small { font-weight: 400; color: var(--muted); font-size: 14px; margin-left: 10px; }
+.engine { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.engine b { color: var(--fg); font-weight: 500; }
+
+/* Drop zone */
+.drop {
+  border: 1.5px dashed var(--line); border-radius: 10px; background: var(--surface);
+  padding: 28px 20px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
+  display: grid; gap: 6px; justify-items: center;
+}
+.drop:hover, .drop:focus-visible { border-color: var(--accent); outline: none; }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop .big { font-size: 16px; font-weight: 500; }
+.drop .hint { color: var(--muted); font-size: 13px; }
+.drop input { display: none; }
+
+/* Settings */
+.settings {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px 18px; align-items: end;
+}
+.field { display: grid; gap: 5px; min-width: 0; }
+.field label { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.field .sub { font-size: 12px; color: var(--muted); }
+.control { display: flex; align-items: center; gap: 6px; }
+input[type=number], select {
+  font: 14px var(--font-body); color: var(--fg); background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 6px; padding: 7px 9px; width: 100%; min-width: 0;
+}
+input[type=number] { font-family: var(--font-mono); }
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.unit { color: var(--muted); font-family: var(--font-mono); font-size: 12px; }
+.check { display: flex; align-items: center; gap: 8px; font-size: 13px; padding-block: 6px; }
+.check input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
+
+/* Summary */
+.summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 2px; min-width: 0; }
+.tile .k { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.tile .v { font-family: var(--font-mono); font-size: 20px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.tile .v.ok { color: var(--ok); }
+.tile .s { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.progress { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.progress > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+
+/* Actions */
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.actions .spacer { flex: 1; }
+button {
+  font: 500 14px var(--font-body); border-radius: 7px; padding: 9px 14px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+button.danger:hover:not(:disabled) { border-color: var(--bad); color: var(--bad); }
+.note { font-size: 13px; color: var(--muted); }
+.note.bad { color: var(--bad); }
+
+/* Results table */
+.results { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.tablewrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: middle; }
+th { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; background: var(--surface-2); position: sticky; top: 0; }
+tr:last-child td { border-bottom: 0; }
+td.name { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+td.dim { font-family: var(--font-mono); color: var(--muted); font-size: 12px; }
+td.out { font-weight: 500; }
+.pill { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: .03em; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+.pill.working { background: var(--accent-soft); color: var(--accent); }
+.pill.done { background: var(--ok-soft); color: var(--ok); }
+.pill.kept { background: var(--warn-soft); color: var(--warn); }
+.pill.error { background: var(--bad-soft); color: var(--bad); }
+td .dl { padding: 4px 9px; font-size: 12px; }
+.empty { padding: 28px; text-align: center; color: var(--muted); }
+.arrow { color: var(--muted); padding: 0 4px; }
+@media (max-width: 720px) {
+  .col-dim, .col-q { display: none; }
+  td.name { max-width: 160px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Shrinkwrap <small>batch image compressor</small></h1>
+    <div class="engine" id="engine">Starting…</div>
+  </header>
+
+  <label class="drop" id="drop" tabindex="0">
+    <span class="big">Drop images or a folder here, or click to choose</span>
+    <span class="hint">JPEG, PNG, WebP, GIF, BMP and anything your browser can open. Hundreds at a time is fine. Files never leave this device.</span>
+    <input type="file" id="fileInput" multiple accept="image/*">
+  </label>
+
+  <section class="settings" aria-label="Settings">
+    <div class="field">
+      <label for="targetKB">Target size per image</label>
+      <div class="control"><input type="number" id="targetKB" min="10" max="50000" step="10" value="200"><span class="unit">KB</span></div>
+      <span class="sub">Each output lands at or under this.</span>
+    </div>
+    <div class="field">
+      <label for="format">Output format</label>
+      <select id="format">
+        <option value="auto">Auto (JPEG, WebP for PNG)</option>
+        <option value="image/jpeg">JPEG</option>
+        <option value="image/webp">WebP</option>
+      </select>
+      <span class="sub">JPEG encodes about 3× faster than WebP.</span>
+    </div>
+    <div class="field">
+      <label for="maxDim">Longest side limit</label>
+      <select id="maxDim">
+        <option value="0">No limit</option>
+        <option value="4096">4096 px</option>
+        <option value="2560">2560 px</option>
+        <option value="1920" selected>1920 px</option>
+        <option value="1280">1280 px</option>
+        <option value="1024">1024 px</option>
+      </select>
+      <span class="sub">Shrinks first, then trades quality.</span>
+    </div>
+    <div class="field">
+      <label for="minQ">Lowest quality allowed</label>
+      <select id="minQ">
+        <option value="0.7">70 (crisp, downsizes sooner)</option>
+        <option value="0.55" selected>55 (balanced)</option>
+        <option value="0.4">40 (keep pixels, accept artifacts)</option>
+      </select>
+      <span class="sub">Below this it shrinks dimensions instead.</span>
+    </div>
+    <div class="field">
+      <label class="check" style="text-transform:none;letter-spacing:0;font-size:13px;font-weight:400;color:var(--fg)"><input type="checkbox" id="skipSmall" checked> Keep files already under target as-is</label>
+    </div>
+  </section>
+
+  <section class="summary" aria-label="Summary">
+    <div class="tile"><span class="k">Images</span><span class="v" id="sCount">0</span><span class="s" id="sDone">none loaded</span></div>
+    <div class="tile"><span class="k">Original</span><span class="v" id="sIn">0 KB</span><span class="s" id="sInAvg">&nbsp;</span></div>
+    <div class="tile"><span class="k">Compressed</span><span class="v" id="sOut">0 KB</span><span class="s" id="sOutAvg">&nbsp;</span></div>
+    <div class="tile"><span class="k">Saved</span><span class="v ok" id="sSaved">0%</span><span class="s" id="sTime">&nbsp;</span></div>
+  </section>
+
+  <div class="progress" aria-hidden="true"><i id="bar"></i></div>
+
+  <div class="actions">
+    <button class="primary" id="btnZip" disabled>Download all as ZIP</button>
+    <button id="btnRerun" disabled>Recompress with current settings</button>
+    <button id="btnCancel" disabled>Stop</button>
+    <span class="spacer"></span>
+    <span class="note" id="msg"></span>
+    <button class="danger" id="btnClear" disabled>Clear</button>
+  </div>
+
+  <section class="results">
+    <div class="tablewrap">
+      <table id="table" hidden>
+        <thead><tr>
+          <th>File</th>
+          <th class="num">Original</th>
+          <th class="col-dim">Pixels</th>
+          <th class="num">Output</th>
+          <th class="num col-q">Quality</th>
+          <th>Status</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="empty">Add images to start. Compression begins automatically and runs on every CPU core this browser gives us.</div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+'use strict';
+
+/* ---------- Compression core: runs inside each worker (and on the main thread as a fallback). ----------
+   Must be self-contained: no references to outer scope. `env` supplies decode + render for the host. */
+async function compressCore(file, opts, env) {
+  const T = opts.target;
+  const minQ = opts.minQ;
+  let type = opts.format;
+  if (type === 'auto') type = (file.type === 'image/png' && opts.webpOK) ? 'image/webp' : 'image/jpeg';
+  if (type === 'image/webp' && !opts.webpOK) type = 'image/jpeg';
+  const sameFormat = opts.format === 'auto' || file.type === type;
+  const smallEnough = opts.skipSmall && file.size <= T && sameFormat;
+  if (smallEnough && !opts.maxDim) return { passthrough: true, encodes: 0 };
+
+  let bmp;
+  try { bmp = await env.decode(file); }
+  catch (e) { throw new Error('This browser cannot decode this file' + (/hei[cf]/i.test(file.name) ? ' (HEIC needs Safari, or export as JPEG first)' : '') + '.'); }
+  const W = bmp.width, H = bmp.height;
+  try {
+    let scale = 1;
+    if (opts.maxDim && Math.max(W, H) > opts.maxDim) scale = opts.maxDim / Math.max(W, H);
+    if (smallEnough && scale === 1) return { passthrough: true, w: W, h: H, encodes: 0 };
+
+    let encodes = 0;
+    const enc = async (sc, q) => {
+      const w = Math.max(1, Math.round(W * sc)), h = Math.max(1, Math.round(H * sc));
+      encodes++;
+      const blob = await env.render(bmp, w, h, type, q);
+      return { blob, w, h, q, sc };
+    };
+
+    let best = null;
+    const first = await enc(scale, 0.82);
+    if (first.blob.size <= T) {
+      best = first;
+      // Spare budget: spend it on quality.
+      if (first.blob.size < T * 0.85) {
+        const hi = await enc(scale, 0.92);
+        if (hi.blob.size <= T) best = hi;
+      }
+    } else {
+      // Bytes scale roughly with pixel count at fixed quality. Dropping from q=0.82 to the
+      // floor typically halves the size; if that still misses, jump straight to a predicted scale.
+      if (first.blob.size * 0.55 > T) scale *= Math.sqrt(T / (first.blob.size * 0.62));
+      for (let round = 0; round < 8 && !best; round++) {
+        const lo = await enc(scale, minQ);
+        if (lo.blob.size <= T) {
+          best = lo;
+          let a = minQ, b = 0.85;
+          for (let i = 0; i < 4 && best.blob.size < T * 0.94; i++) {
+            const mid = (a + b) / 2;
+            const m = await enc(scale, mid);
+            if (m.blob.size <= T) { best = m; a = mid; } else b = mid;
+          }
+        } else {
+          scale *= Math.sqrt(T / lo.blob.size) * 0.92;
+          if (Math.max(W, H) * scale < 32) { best = lo; break; }
+        }
+      }
+    }
+    // Never hand back a bigger file than we were given when nothing else changed.
+    if (sameFormat && file.size <= T && best.blob.size >= file.size && best.w === W && best.h === H) {
+      return { passthrough: true, w: W, h: H, encodes };
+    }
+    return { blob: best.blob, type, w: best.w, h: best.h, q: best.q, ow: W, oh: H, encodes };
+  } finally {
+    if (bmp.close) bmp.close();
+  }
+}
+
+/* Worker-side environment. Also stringified into the worker. */
+function makeWorkerEnv() {
+  let canvas = null, ctx = null;
+  return {
+    decode: (file) => createImageBitmap(file),
+    render: async (bmp, w, h, type, q) => {
+      if (!canvas) { canvas = new OffscreenCanvas(w, h); ctx = canvas.getContext('2d'); }
+      else { canvas.width = w; canvas.height = h; }
+      if (type === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); } else ctx.clearRect(0, 0, w, h);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(bmp, 0, 0, w, h);
+      return canvas.convertToBlob({ type, quality: q });
+    }
+  };
+}
+
+const WORKER_SRC = `
+'use strict';
+const compressCore = ${compressCore.toString()};
+const env = (${makeWorkerEnv.toString()})();
+(async () => {
+  let webpOK = false;
+  try { const c = new OffscreenCanvas(2, 2); c.getContext('2d'); const b = await c.convertToBlob({ type: 'image/webp', quality: 0.8 }); webpOK = b.type === 'image/webp'; } catch (e) {}
+  postMessage({ type: 'ready', webpOK });
+})();
+onmessage = async (e) => {
+  const { id, file, opts } = e.data;
+  try {
+    const r = await compressCore(file, opts, env);
+    postMessage({ type: 'done', id, result: r });
+  } catch (err) {
+    postMessage({ type: 'error', id, message: String((err && err.message) || err) });
+  }
+};
+`;
+
+/* ---------- Main thread ---------- */
+const $ = (s) => document.querySelector(s);
+const els = {
+  drop: $('#drop'), fileInput: $('#fileInput'), engine: $('#engine'),
+  targetKB: $('#targetKB'), format: $('#format'), maxDim: $('#maxDim'), minQ: $('#minQ'), skipSmall: $('#skipSmall'),
+  sCount: $('#sCount'), sDone: $('#sDone'), sIn: $('#sIn'), sInAvg: $('#sInAvg'), sOut: $('#sOut'), sOutAvg: $('#sOutAvg'),
+  sSaved: $('#sSaved'), sTime: $('#sTime'), bar: $('#bar'),
+  btnZip: $('#btnZip'), btnRerun: $('#btnRerun'), btnCancel: $('#btnCancel'), btnClear: $('#btnClear'), msg: $('#msg'),
+  table: $('#table'), tbody: $('#tbody'), empty: $('#empty'),
+};
+
+const state = {
+  items: [], byId: new Map(), nextId: 1,
+  queue: [], running: 0, batchStart: 0, batchEncodes: 0,
+  pool: null, webpOK: false, mainEnv: null, zipping: false,
+};
+
+/* Settings: read + persist */
+function settings() {
+  return {
+    target: Math.max(10, Number(els.targetKB.value) || 200) * 1024,
+    format: els.format.value,
+    maxDim: Number(els.maxDim.value) || 0,
+    minQ: Number(els.minQ.value) || 0.55,
+    skipSmall: els.skipSmall.checked,
+    webpOK: state.webpOK,
+  };
+}
+function saveSettings() {
+  try { localStorage.setItem('shrinkwrap.settings', JSON.stringify({ t: els.targetKB.value, f: els.format.value, d: els.maxDim.value, q: els.minQ.value, s: els.skipSmall.checked })); } catch (e) {}
+}
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem('shrinkwrap.settings') || 'null');
+    if (!s) return;
+    if (s.t) els.targetKB.value = s.t;
+    if (s.f) els.format.value = s.f;
+    if (s.d != null) els.maxDim.value = s.d;
+    if (s.q) els.minQ.value = s.q;
+    if (typeof s.s === 'boolean') els.skipSmall.checked = s.s;
+  } catch (e) {}
+}
+for (const el of [els.targetKB, els.format, els.maxDim, els.minQ, els.skipSmall]) el.addEventListener('change', saveSettings);
+loadSettings();
+
+/* Formatting */
+function fmtBytes(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(n < 10 * 1024 ? 1 : 0) + ' KB';
+  return (n / (1024 * 1024)).toFixed(2) + ' MB';
+}
+function fmtPct(n) { return (Math.round(n * 10) / 10).toFixed(1) + '%'; }
+function extFor(type) { return type === 'image/webp' ? '.webp' : type === 'image/png' ? '.png' : '.jpg'; }
+function outName(item) {
+  if (!item.result || item.result.passthrough) return item.file.name;
+  const base = item.file.name.replace(/\.[^.]+$/, '');
+  return base + extFor(item.result.type);
+}
+
+/* ---------- Worker pool ---------- */
+const THREADS = Math.min(8, Math.max(2, navigator.hardwareConcurrency || 4));
+const canUseWorkers = typeof Worker !== 'undefined' && typeof OffscreenCanvas !== 'undefined'
+  && typeof OffscreenCanvas.prototype.convertToBlob === 'function' && typeof createImageBitmap === 'function';
+
+function buildPool() {
+  return new Promise((resolve) => {
+    if (!canUseWorkers) return resolve(null);
+    let url;
+    try { url = URL.createObjectURL(new Blob([WORKER_SRC], { type: 'text/javascript' })); } catch (e) { return resolve(null); }
+    const workers = [];
+    let ready = 0, failed = false, webp = true;
+    const timer = setTimeout(() => finish(false), 4000);
+    function finish(ok) {
+      clearTimeout(timer);
+      if (!ok) { for (const w of workers) w.worker.terminate(); return resolve(null); }
+      state.webpOK = webp;
+      resolve(workers);
+    }
+    for (let i = 0; i < THREADS; i++) {
+      let worker;
+      try { worker = new Worker(url); } catch (e) { failed = true; break; }
+      const slot = { worker, busy: null };
+      worker.onmessage = (e) => {
+        const m = e.data;
+        if (m.type === 'ready') {
+          webp = webp && !!m.webpOK;
+          if (++ready === THREADS) finish(true);
+          return;
+        }
+        const item = state.byId.get(m.id);
+        slot.busy = null;
+        state.running--;
+        if (item && item.gen === state.gen) {
+          if (m.type === 'done') onDone(item, m.result); else onError(item, m.message);
+        }
+        pump();
+      };
+      worker.onerror = (e) => {
+        if (ready < THREADS) { failed = true; finish(false); return; }
+        if (slot.busy) { const item = state.byId.get(slot.busy); slot.busy = null; state.running--; if (item) onError(item, 'Worker crashed: ' + (e.message || 'unknown error')); pump(); }
+      };
+      workers.push(slot);
+    }
+    if (failed) finish(false);
+  });
+}
+
+/* Main-thread fallback environment (older Safari, or workers blocked). */
+function makeMainEnv() {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  return {
+    decode: async (file) => {
+      if (typeof createImageBitmap === 'function') { try { return await createImageBitmap(file); } catch (e) {} }
+      const url = URL.createObjectURL(file);
+      try {
+        return await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('decode')); im.src = url; });
+      } finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
+    },
+    render: (bmp, w, h, type, q) => new Promise((res, rej) => {
+      canvas.width = w; canvas.height = h;
+      if (type === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); } else ctx.clearRect(0, 0, w, h);
+      ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(bmp, 0, 0, w, h);
+      canvas.toBlob((b) => b ? res(b) : rej(new Error('encode failed')), type, q);
+    })
+  };
+}
+
+state.gen = 0;
+state.poolReady = (async () => {
+  state.pool = await buildPool();
+  if (!state.pool) {
+    state.mainEnv = makeMainEnv();
+    try {
+      const c = document.createElement('canvas'); c.width = c.height = 2;
+      state.webpOK = c.toDataURL('image/webp').startsWith('data:image/webp');
+    } catch (e) { state.webpOK = false; }
+    els.engine.innerHTML = 'Engine: <b>main thread</b> · workers unavailable here';
+  } else {
+    els.engine.innerHTML = `Engine: <b>${THREADS} parallel workers</b> · ${state.webpOK ? 'WebP ready' : 'WebP not supported, JPEG only'}`;
+  }
+  if (!state.webpOK) { els.format.querySelector('option[value="image/webp"]').disabled = true; if (els.format.value === 'image/webp') els.format.value = 'image/jpeg'; }
+})();
+
+/* ---------- Scheduling ---------- */
+function pump() {
+  if (!state.pool) return pumpMain();
+  for (const slot of state.pool) {
+    if (slot.busy || !state.queue.length) continue;
+    const item = state.queue.shift();
+    if (item.status !== 'queued') continue;
+    item.status = 'working'; renderRow(item);
+    slot.busy = item.id; state.running++;
+    slot.worker.postMessage({ id: item.id, file: item.file, opts: item.opts });
+  }
+  if (!state.queue.length && !state.running) onBatchIdle();
+  updateSummary();
+}
+let mainBusy = false;
+async function pumpMain() {
+  if (mainBusy) return;
+  mainBusy = true;
+  while (state.queue.length) {
+    const item = state.queue.shift();
+    if (item.status !== 'queued') continue;
+    item.status = 'working'; renderRow(item); updateSummary();
+    state.running++;
+    const gen = state.gen;
+    try {
+      const r = await compressCore(item.file, item.opts, state.mainEnv);
+      if (gen === state.gen) onDone(item, r);
+    } catch (e) { if (gen === state.gen) onError(item, e.message || String(e)); }
+    state.running--;
+    await new Promise(r => setTimeout(r, 0));
+  }
+  mainBusy = false;
+  onBatchIdle();
+  updateSummary();
+}
+
+function onDone(item, r) {
+  item.result = r;
+  item.status = r.passthrough ? 'kept' : 'done';
+  item.outSize = r.passthrough ? item.file.size : r.blob.size;
+  state.batchEncodes += r.encodes || 0;
+  renderRow(item);
+}
+function onError(item, message) {
+  item.status = 'error'; item.error = message; item.result = null; item.outSize = 0;
+  renderRow(item);
+}
+function onBatchIdle() {
+  if (state.batchStart) {
+    const secs = (performance.now() - state.batchStart) / 1000;
+    const n = state.items.filter(i => i.status === 'done' || i.status === 'kept').length;
+    els.sTime.textContent = `${secs.toFixed(1)} s · ${(n / Math.max(secs, 0.001)).toFixed(1)} images/s · ${state.batchEncodes} encodes`;
+    state.batchStart = 0;
+  }
+  els.btnCancel.disabled = true;
+}
+
+async function addFiles(files) {
+  await state.poolReady;
+  const accepted = [];
+  for (const f of files) {
+    const isImage = (f.type && f.type.startsWith('image/')) || /\.(jpe?g|png|webp|gif|bmp|avif|heic|heif|tiff?|jfif)$/i.test(f.name);
+    if (isImage) accepted.push(f);
+  }
+  if (!accepted.length) { setMsg('No image files found in that selection.', true); return; }
+  const opts = settings();
+  const frag = document.createDocumentFragment();
+  for (const f of accepted) {
+    const item = { id: state.nextId++, file: f, status: 'queued', opts, gen: state.gen, result: null, outSize: 0 };
+    state.items.push(item); state.byId.set(item.id, item);
+    item.row = makeRow(item); frag.appendChild(item.row);
+    state.queue.push(item);
+  }
+  els.tbody.appendChild(frag);
+  els.table.hidden = false; els.empty.hidden = true;
+  els.btnClear.disabled = false; els.btnRerun.disabled = false; els.btnCancel.disabled = false;
+  setMsg('');
+  if (!state.batchStart) { state.batchStart = performance.now(); state.batchEncodes = 0; }
+  pump();
+}
+
+function recompressAll() {
+  cancelRunning();
+  const opts = settings();
+  state.gen++;
+  state.queue = [];
+  state.batchStart = performance.now(); state.batchEncodes = 0;
+  for (const item of state.items) {
+    item.opts = opts; item.gen = state.gen; item.status = 'queued'; item.result = null; item.outSize = 0; item.error = null;
+    renderRow(item); state.queue.push(item);
+  }
+  els.btnCancel.disabled = false;
+  pump();
+}
+function cancelRunning() {
+  if (!state.queue.length && !state.running) return;
+  state.gen++;
+  for (const item of state.queue) { item.status = 'cancelled'; renderRow(item); }
+  state.queue = [];
+  if (state.pool) {
+    // Terminate mid-flight workers and rebuild the pool so the next batch starts clean.
+    for (const slot of state.pool) { if (slot.busy) { const it = state.byId.get(slot.busy); if (it && it.status === 'working') { it.status = 'cancelled'; renderRow(it); } } slot.worker.terminate(); }
+    state.running = 0;
+    state.pool = null;
+    state.poolReady = buildPool().then(p => { state.pool = p; if (!p) state.mainEnv = makeMainEnv(); });
+  } else {
+    for (const item of state.items) if (item.status === 'working') { item.status = 'cancelled'; renderRow(item); }
+  }
+  onBatchIdle();
+  updateSummary();
+}
+function clearAll() {
+  cancelRunning();
+  state.items = []; state.byId.clear(); state.queue = []; state.running = 0;
+  els.tbody.textContent = '';
+  els.table.hidden = true; els.empty.hidden = false;
+  els.btnClear.disabled = true; els.btnRerun.disabled = true; els.btnZip.disabled = true;
+  els.sTime.textContent = ' '; els.bar.style.width = '0';
+  setMsg('');
+  updateSummary();
+}
+
+/* ---------- Rendering ---------- */
+function makeRow(item) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = '<td class="name"></td><td class="num in"></td><td class="dim col-dim"></td><td class="num out"></td><td class="num q col-q"></td><td class="st"></td><td class="act"></td>';
+  tr.querySelector('.name').textContent = item.file.name;
+  tr.querySelector('.name').title = item.file.name;
+  tr.querySelector('.in').textContent = fmtBytes(item.file.size);
+  const btn = document.createElement('button'); btn.className = 'dl'; btn.textContent = 'Save'; btn.hidden = true;
+  btn.addEventListener('click', () => saveItem(item));
+  tr.querySelector('.act').appendChild(btn);
+  return tr;
+}
+const STATUS_LABEL = { queued: 'Queued', working: 'Working', done: 'Done', kept: 'Kept original', error: 'Failed', cancelled: 'Stopped' };
+function renderRow(item) {
+  const tr = item.row; if (!tr) return;
+  const st = tr.querySelector('.st'), out = tr.querySelector('.out'), dim = tr.querySelector('.dim'), q = tr.querySelector('.q'), btn = tr.querySelector('.dl');
+  st.innerHTML = `<span class="pill ${item.status}">${STATUS_LABEL[item.status] || item.status}</span>`;
+  if (item.status === 'error') { st.title = item.error || ''; st.innerHTML += ` <span class="note bad">${escapeHtml(item.error || '')}</span>`; }
+  else st.title = '';
+  const r = item.result;
+  if (r) {
+    out.textContent = fmtBytes(item.outSize);
+    if (r.passthrough) { dim.textContent = r.w ? `${r.w}×${r.h}` : '—'; q.textContent = 'original'; }
+    else {
+      dim.innerHTML = (r.ow !== r.w || r.oh !== r.h) ? `${r.ow}×${r.oh}<span class="arrow">→</span>${r.w}×${r.h}` : `${r.w}×${r.h}`;
+      q.textContent = Math.round(r.q * 100) + '';
+    }
+    btn.hidden = false;
+  } else { out.textContent = ''; dim.textContent = ''; q.textContent = ''; btn.hidden = true; }
+}
+function escapeHtml(s) { return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function updateSummary() {
+  const items = state.items;
+  const n = items.length;
+  const finished = items.filter(i => i.status === 'done' || i.status === 'kept');
+  const failed = items.filter(i => i.status === 'error').length;
+  const settled = finished.length + failed + items.filter(i => i.status === 'cancelled').length;
+  const inBytes = finished.reduce((a, i) => a + i.file.size, 0);
+  const outBytes = finished.reduce((a, i) => a + i.outSize, 0);
+  els.sCount.textContent = n;
+  els.sDone.textContent = n ? `${finished.length} done${failed ? `, ${failed} failed` : ''}${settled < n ? `, ${n - settled} to go` : ''}` : 'none loaded';
+  els.sIn.textContent = fmtBytes(inBytes);
+  els.sInAvg.textContent = finished.length ? `avg ${fmtBytes(inBytes / finished.length)}` : ' ';
+  els.sOut.textContent = fmtBytes(outBytes);
+  els.sOutAvg.textContent = finished.length ? `avg ${fmtBytes(outBytes / finished.length)}` : ' ';
+  els.sSaved.textContent = inBytes ? fmtPct((1 - outBytes / inBytes) * 100) : '0%';
+  els.bar.style.width = n ? (settled / n * 100) + '%' : '0';
+  els.btnZip.disabled = !finished.length || state.zipping || settled < n;
+  els.btnCancel.disabled = !(state.queue.length || state.running);
+}
+
+function setMsg(text, bad) { els.msg.textContent = text; els.msg.className = 'note' + (bad ? ' bad' : ''); }
+
+/* ---------- Saving ---------- */
+let downloadsCap = undefined;
+async function getDownloads() {
+  if (downloadsCap !== undefined) return downloadsCap;
+  try { downloadsCap = (window.claude && typeof window.claude.use === 'function') ? await window.claude.use('downloads') : null; }
+  catch (e) { downloadsCap = null; }
+  return downloadsCap;
+}
+async function saveFile(name, blob) {
+  const dl = await getDownloads();
+  if (dl) {
+    try { await dl.save({ filename: name, data: blob }); return true; }
+    catch (e) { if (e && e.code === 'declined') return false; throw e; }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = name; a.rel = 'noopener';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  return true;
+}
+async function saveItem(item) {
+  if (!item.result) return;
+  const blob = item.result.passthrough ? item.file : item.result.blob;
+  try { await saveFile(outName(item), blob); } catch (e) { setMsg('Could not save: ' + (e.message || e), true); }
+}
+async function downloadZip() {
+  if (state.zipping) return;
+  if (typeof JSZip === 'undefined') { setMsg('ZIP library did not load (offline?). Use the per-file Save buttons.', true); return; }
+  const finished = state.items.filter(i => i.status === 'done' || i.status === 'kept');
+  if (!finished.length) return;
+  state.zipping = true; updateSummary();
+  try {
+    const zip = new JSZip();
+    const used = new Set();
+    for (const item of finished) {
+      let name = outName(item);
+      if (used.has(name.toLowerCase())) {
+        const m = name.match(/^(.*?)(\.[^.]*)?$/); let k = 2;
+        while (used.has(`${m[1]} (${k})${m[2] || ''}`.toLowerCase())) k++;
+        name = `${m[1]} (${k})${m[2] || ''}`;
+      }
+      used.add(name.toLowerCase());
+      zip.file(name, item.result.passthrough ? item.file : item.result.blob);
+    }
+    // Images are already compressed; STORE skips a pointless deflate pass and is far faster.
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' }, (m) => setMsg(`Packing ZIP… ${Math.round(m.percent)}%`));
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+    const ok = await saveFile(`compressed-${finished.length}-images-${stamp}.zip`, blob);
+    setMsg(ok ? `ZIP ready: ${finished.length} files, ${fmtBytes(blob.size)}.` : 'Save cancelled.');
+  } catch (e) {
+    setMsg('ZIP failed: ' + (e.message || e), true);
+  } finally { state.zipping = false; updateSummary(); }
+}
+
+/* ---------- Input: picker, drag & drop, folders ---------- */
+els.fileInput.addEventListener('change', () => { addFiles([...els.fileInput.files]); els.fileInput.value = ''; });
+els.drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); els.fileInput.click(); } });
+
+async function filesFromDataTransfer(dt) {
+  const items = dt.items ? [...dt.items] : [];
+  const entries = items.map(i => i.webkitGetAsEntry ? i.webkitGetAsEntry() : null);
+  if (!entries.some(Boolean)) return [...dt.files];
+  const out = [];
+  async function walk(entry) {
+    if (!entry) return;
+    if (entry.isFile) { await new Promise(res => entry.file(f => { out.push(f); res(); }, res)); return; }
+    if (entry.isDirectory) {
+      const reader = entry.createReader();
+      for (;;) {
+        const batch = await new Promise(res => reader.readEntries(res, () => res([])));
+        if (!batch.length) break;
+        for (const e of batch) await walk(e);
+      }
+    }
+  }
+  for (const e of entries) await walk(e);
+  return out;
+}
+for (const evt of ['dragenter', 'dragover']) document.addEventListener(evt, (e) => { e.preventDefault(); els.drop.classList.add('over'); });
+document.addEventListener('dragleave', (e) => { if (!e.relatedTarget) els.drop.classList.remove('over'); });
+document.addEventListener('drop', async (e) => {
+  e.preventDefault(); els.drop.classList.remove('over');
+  const files = await filesFromDataTransfer(e.dataTransfer);
+  addFiles(files);
+});
+document.addEventListener('paste', (e) => {
+  const files = [...(e.clipboardData?.files || [])];
+  if (files.length) addFiles(files);
+});
+
+els.btnZip.addEventListener('click', downloadZip);
+els.btnRerun.addEventListener('click', recompressAll);
+els.btnCancel.addEventListener('click', cancelRunning);
+els.btnClear.addEventListener('click', clearAll);
+
+updateSummary();
+window.__shrinkwrap = { addFiles, state, settings };
+</script>
+
+</body>
+</html>
